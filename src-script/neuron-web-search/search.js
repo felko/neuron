@@ -1,4 +1,4 @@
-let search, zettels;
+let search, tags, zettels;
 
 let searchResults = document.getElementById("search-results"); // ul element
 let searchInput = document.getElementById("search-input");
@@ -69,7 +69,9 @@ searchInput.addEventListener("input", runSearch);
 let xmlhttp = new XMLHttpRequest();
 xmlhttp.onreadystatechange = function () {
   if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
-    zettels = JSON.parse(xmlhttp.responseText);
+    let results = JSON.parse(xmlhttp.responseText);
+    tags = results.tags;
+    zettels = results.zettels;
     rebuildSearchIndex();
     renderResults(zettels);
   }

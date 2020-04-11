@@ -100,9 +100,8 @@ generateSite writeHtmlRoute' zettelsPat = do
 
 writeIndex :: Z.ZettelStore -> Action ()
 writeIndex store = do
-  let zettels = Z.runQuery store []
-      index = Aeson.toJSON zettels
-  Rib.writeFileCached "index.json" (decodeUtf8 (Aeson.encode index))
+  let results = Z.runQuery store []
+  Rib.writeFileCached "index.json" $ decodeUtf8 (Aeson.encode (Aeson.toJSON results))
 
 -- | Create a new zettel file and open it in editor if requested
 --

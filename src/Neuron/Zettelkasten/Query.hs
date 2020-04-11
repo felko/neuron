@@ -13,6 +13,7 @@ module Neuron.Zettelkasten.Query where
 
 import Data.Aeson
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import Neuron.Zettelkasten.ID
 import Neuron.Zettelkasten.Store
 import Neuron.Zettelkasten.Zettel
@@ -35,6 +36,28 @@ instance ToJSON MatchContent where
       [ "textualID" .= matchTextualID
       ]
 
+data MatchResults = MatchResults
+  { matchTags :: Set.Set Text,
+    matchZettels :: [Zettel MatchContent]
+  }
+
+instance Semigroup MatchResults where
+  MatchResults tags zettels <> MatchResults tags' zettels' =
+    MatchResults (tags <> tags') (zettels <> zettels')
+
+instance Monoid MatchResults where
+  mempty = MatchResults mempty mempty
+
+singleMatch :: Zettel MatchContent -> MatchResults
+singleMatch z@Zettel {..} = MatchResults (Set.fromList zettelTags) [z]
+
+instance ToJSON MatchResults where
+  toJSON MatchResults {..} =
+    object
+      [ "tags" .= matchTags,
+        "zettels" .= matchZettels
+      ]
+
 matchQuery :: Zettel c -> Query -> Bool
 matchQuery Zettel {..} = \case
   ByTag tag -> tag `elem` zettelTags
@@ -45,7 +68,7 @@ extractMatchContent = extendContent $ \Zettel {..} ->
     { matchTextualID = zettelIDText zettelID
     }
 
-runQuery :: ZettelStore -> [Query] -> [Zettel MatchContent]
+runQuery :: ZettelStore -> [Query] -> MatchResults
 runQuery store queries =
-  fmap extractMatchContent $ flip filter (Map.elems store) $ \z ->
+  foldMap (singleMatch . extractMatchContent) $ flip filter (Map.elems store) $ \z ->
     and $ matchQuery z <$> queries
