@@ -34,12 +34,13 @@ instance Show (Zettel c) where
   show Zettel {..} = "Zettel:" <> show zettelID
 
 -- TODO: Use generic deriving use field label modifier.
-instance ToJSON (Zettel ()) where
+instance ToJSON c => ToJSON (Zettel c) where
   toJSON Zettel {..} =
     object
       [ "id" .= toJSON zettelID,
         "title" .= zettelTitle,
-        "tags" .= zettelTags
+        "tags" .= zettelTags,
+        "content" .= toJSON zettelContent
       ]
 
 -- | Load a zettel from a file.
@@ -57,3 +58,7 @@ mkZettelFromPath path = do
 hasTag :: forall c. Text -> Zettel c -> Bool
 hasTag t Zettel {..} =
   isJust $ find (== t) zettelTags
+
+-- Similar to Comonad.extend because Zettel c ~ Env (Zettel ()) c
+extendContent :: (Zettel c -> c') -> Zettel c -> Zettel c'
+extendContent f zettel = zettel {zettelContent = f zettel}
