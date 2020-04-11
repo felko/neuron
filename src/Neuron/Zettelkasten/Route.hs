@@ -28,6 +28,7 @@ data Route store graph a where
   Route_IndexRedirect :: Route ZettelStore ZettelGraph ()
   Route_ZIndex :: Route ZettelStore ZettelGraph ()
   Route_Zettel :: ZettelID -> Route ZettelStore ZettelGraph ()
+  Route_Search :: Route ZettelStore ZettelGraph ()
 
 instance IsRoute (Route store graph) where
   routeFile = \case
@@ -37,6 +38,8 @@ instance IsRoute (Route store graph) where
       pure "z-index.html"
     Route_Zettel (zettelIDText -> s) ->
       pure $ toString s <> ".html"
+    Route_Search -> do
+      pure "search.html"
 
 -- | Return short name corresponding to the route
 routeName :: Route store graph a -> Text
@@ -44,6 +47,7 @@ routeName = \case
   Route_IndexRedirect -> "Index"
   Route_ZIndex -> "Zettels"
   Route_Zettel zid -> zettelIDText zid
+  Route_Search -> "Search"
 
 -- | Return full title for a route
 routeTitle :: Config -> store -> Route store graph a -> Text
@@ -62,6 +66,7 @@ routeTitle' store = \case
   Route_ZIndex -> "Zettel Index"
   Route_Zettel (flip lookupStore store -> Zettel {..}) ->
     zettelTitle
+  Route_Search -> "Search"
 
 routeOpenGraph :: Config -> store -> Route store graph a -> OpenGraph
 routeOpenGraph Config {..} store r =
@@ -72,7 +77,8 @@ routeOpenGraph Config {..} store r =
         Route_IndexRedirect -> Nothing
         Route_ZIndex -> Just "Zettelkasten Index"
         Route_Zettel (flip lookupStore store -> Zettel {..}) ->
-          T.take 300 <$> MMark.getFirstParagraphText zettelContent,
+          T.take 300 <$> MMark.getFirstParagraphText zettelContent
+        Route_Search -> Just "Search Zettelkasten",
       _openGraph_author = author,
       _openGraph_type = case r of
         Route_Zettel _ -> Just $ OGType_Article (Article Nothing Nothing Nothing Nothing mempty)

@@ -7,6 +7,7 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -17,6 +18,7 @@ module Neuron.Zettelkasten.View where
 
 import Clay hiding (head, id, ms, reverse, s, type_)
 import qualified Clay as C
+import Data.FileEmbed (embedStringFile)
 import Data.Foldable (maximum)
 import Data.Tree (Tree (..))
 import Lucid
@@ -38,6 +40,9 @@ import qualified Rib.Parser.MMark as MMark
 import Text.MMark (useExtensions)
 import Text.Pandoc.Highlighting (styleToCss, tango)
 
+searchScript :: Text
+searchScript = $(embedStringFile "./src-script/neuron-web-search/search.js")
+
 renderRouteHead :: Monad m => Config -> Route store graph a -> store -> HtmlT m ()
 renderRouteHead config r val = do
   meta_ [httpEquiv_ "Content-Type", content_ "text/html; charset=utf-8"]
@@ -47,6 +52,8 @@ renderRouteHead config r val = do
   case r of
     Route_IndexRedirect ->
       mempty
+    Route_Search -> do
+      with (script_ mempty) [src_ "https://unpkg.com/js-search@1.3.7/dist/umd/js-search.min.js"]
     _ -> do
       toHtml $ routeOpenGraph config val r
       style_ [type_ "text/css"] $ styleToCss tango
@@ -58,6 +65,8 @@ renderRouteBody config r val = do
       renderIndex val
     Route_Zettel zid ->
       renderZettel config val zid
+    Route_Search ->
+      renderSearch
     Route_IndexRedirect ->
       meta_ [httpEquiv_ "Refresh", content_ $ "0; url=" <> Rib.routeUrlRel Route_ZIndex]
 
@@ -88,6 +97,15 @@ renderIndex (store, graph) = do
       1 -> "is 1 " <> noun
       n -> "are " <> show n <> " " <> nounPlural
 
+renderSearch :: forall m. Monad m => HtmlT m ()
+renderSearch = do
+  h1_ [class_ "header"] $ "Search"
+  div_ [class_ "ui fluid icon input search"] $ do
+    input_ [type_ "text", id_ "search-input"]
+    fa "search icon fas fa-search"
+  ul_ [id_ "search-results", class_ "zettel-list"] mempty
+  script_ searchScript
+
 renderZettel :: forall m. Monad m => Config -> (ZettelStore, ZettelGraph) -> ZettelID -> HtmlT m ()
 renderZettel config@Config {..} (store, graph) zid = do
   let Zettel {..} = lookupStore zid store
@@ -111,15 +129,17 @@ renderZettel config@Config {..} (store, graph) zid = do
           ul_ $ do
             renderForest True Nothing LinkTheme_Simple store graph forestB
     div_ [class_ "ui inverted black bottom attached footer segment"] $ do
-      div_ [class_ "ui three column grid"] $ do
+      div_ [class_ "ui equal width grid"] $ do
         div_ [class_ "center aligned column"] $ do
           a_ [href_ ".", title_ "/"] $ fa "fas fa-home"
-        div_ [class_ "center aligned column"] $ do
-          whenJust editUrl $ \urlPrefix ->
+        whenJust editUrl $ \urlPrefix ->
+          div_ [class_ "center aligned column"] $ do
             a_ [href_ $ urlPrefix <> zettelIDSourceFileName zid, title_ "Edit this Zettel"] $ fa "fas fa-edit"
         div_ [class_ "center aligned column"] $ do
           a_ [href_ (Rib.routeUrlRel Route_ZIndex), title_ "All Zettels (z-index)"] $
             fa "fas fa-tree"
+        div_ [class_ "center aligned column"] $ do
+          a_ [href_ (Rib.routeUrlRel Route_Search), title_ "Search Zettels"] $ fa "fas fa-search"
     div_ [class_ "ui one column grid footer-version"] $ do
       div_ [class_ "center aligned column"] $ do
         p_ $ do
@@ -192,15 +212,12 @@ style = do
     C.fontWeight C.bold
     C.color linkTitleColor
   "div.z-index" ? do
-    C.ul ? do
-      C.listStyleType C.square
-      C.paddingLeft $ em 1.5
+    C.ul ? squareListStyle
+  "div.search" ? do
+    mempty
+  "ul.zettel-list" ? squareListStyle
   "div.zettel-view" ? do
-    C.ul ? do
-      C.paddingLeft $ em 1.5
-      C.listStyleType C.square
-      C.li ? do
-        mempty -- C.paddingBottom $ em 1
+    C.ul ? squareListStyle
     C.h1 ? do
       C.paddingTop $ em 0.2
       C.paddingBottom $ em 0.2
@@ -235,6 +252,9 @@ style = do
   ".footer-version" ? do
     C.fontSize $ em 0.7
   where
+    squareListStyle = do
+      C.paddingLeft (em 1.5)
+      C.listStyleType C.square
     codeStyle = do
       C.code ? do
         sym margin auto
